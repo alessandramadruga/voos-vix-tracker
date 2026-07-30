@@ -319,7 +319,7 @@ function durationToMinutes(d) {
 }
 
 function score(row) {
-  const price = parseFloat(row.preco_ida_reais) || 0;
+  const price = parseFloat(row.preco_total_reais) || 0;
   const mins = durationToMinutes(row.duracao);
   const stops = parseInt(row.escalas, 10) || 0;
   return price + mins * 3 + stops * 150;
@@ -329,27 +329,33 @@ function fmtBRL(n) {
   return 'R$ ' + Number(n).toLocaleString('pt-BR', { minimumFractionDigits: 0 });
 }
 
+function fmtDate(d) {
+  return new Date(d.replace('+1', '') + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+}
+
 function destName(code) {
   return code === 'REC' ? 'Recife' : code === 'JPA' ? 'João Pessoa' : code;
 }
+
+function comboKey(r) { return `${r.destino} ${fmtDate(r.data_ida)}→${fmtDate(r.data_volta)}`; }
 
 function renderTop3(rows) {
   const ranked = [...rows].sort((a, b) => score(a) - score(b)).slice(0, 3);
   const labels = ['Melhor custo-benefício', '2º melhor', '3º melhor'];
   return `
     <section>
-      <h2>Top 3 melhor custo-benefício (todas as rotas e datas coletadas)</h2>
+      <h2>Top 3 melhor custo-benefício (ida e volta, ambas as janelas)</h2>
       <div class="top3">
         ${ranked.map((r, i) => `
           <div class="pick">
             <span class="badge">${labels[i]}</span>
-            <div class="route-line">VIX → ${destName(r.destino)} · ${new Date(r.data_voo + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}</div>
-            <span class="price">${fmtBRL(r.preco_ida_reais)} <small>ida</small></span>
+            <div class="route-line">VIX → ${destName(r.destino)} · ida ${fmtDate(r.data_ida)} / volta ${fmtDate(r.data_volta)}</div>
+            <span class="price">${fmtBRL(r.preco_total_reais)} <small>ida e volta</small></span>
             <div class="flight-meta">
-              <span class="times">${r.horario_saida}–${r.horario_chegada}</span>
+              <span class="times">${r.horario_saida_ida}–${r.horario_chegada_ida}</span>
               <span>${r.cia_aerea}</span>
               <span class="chip ${r.escalas === '0' ? 'direct' : ''}">${r.escalas === '0' ? 'sem escalas' : (r.conexao || '1 parada')}</span>
-              <span>${r.duracao}</span>
+              <span>${r.duracao_ida}</span>
             </div>
           </div>
         `).join('')}
@@ -362,19 +368,19 @@ function renderStrip(rows) {
   const byRoute = groupBy(rows, r => r.destino);
   return `
     <section>
-      <h2>Valor diário (menor preço encontrado por dia)</h2>
+      <h2>Comparativo de preço por janela de datas (ida e volta, menor preço)</h2>
       ${Object.entries(byRoute).map(([dest, rs]) => {
-        const byDate = groupBy(rs, r => r.data_voo);
-        const dates = Object.keys(byDate).sort();
-        const globalMin = Math.min(...rs.map(r => parseFloat(r.preco_ida_reais)));
+        const byCombo = groupBy(rs, comboKey);
+        const combos = Object.keys(byCombo).sort();
+        const globalMin = Math.min(...rs.map(r => parseFloat(r.preco_total_reais)));
         return `
           <div class="strip-group">
             <div class="route-label">VIX → ${destName(dest)}</div>
             <div class="strip">
-              ${dates.map(d => {
-                const cheapest = Math.min(...byDate[d].map(r => parseFloat(r.preco_ida_reais)));
+              ${combos.map(c => {
+                const cheapest = Math.min(...byCombo[c].map(r => parseFloat(r.preco_total_reais)));
                 const isMin = cheapest === globalMin;
-                const label = new Date(d + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+                const label = c.split(' ')[1];
                 return `<div class="day ${isMin ? 'cheapest' : ''}"><div class="date">${label}</div><span class="price mono">${fmtBRL(cheapest)}</span></div>`;
               }).join('')}
             </div>
@@ -386,7 +392,7 @@ function renderStrip(rows) {
 }
 
 function renderTable(rows) {
-  const sorted = [...rows].sort((a, b) => (a.destino + a.data_voo).localeCompare(b.destino + b.data_voo) || parseFloat(a.preco_ida_reais) - parseFloat(b.preco_ida_reais));
+  const sorted = [...rows].sort((a, b) => (a.destino + a.data_ida).localeCompare(b.destino + b.data_ida) || parseFloat(a.preco_total_reais) - parseFloat(b.preco_total_reais));
   return `
     <section>
       <h2>Todos os voos coletados</h2>
@@ -394,22 +400,23 @@ function renderTable(rows) {
         <table>
           <thead>
             <tr>
-              <th>Rota</th><th>Data voo</th><th>Cia</th><th>Saída</th><th>Chegada</th>
-              <th>Duração</th><th>Escalas</th><th>Conexão</th><th>Preço (ida)</th><th>Obs.</th>
+              <th>Rota</th><th>Ida</th><th>Volta</th><th>Cia</th><th>Saída (ida)</th><th>Chegada (ida)</th>
+              <th>Duração (ida)</th><th>Escalas</th><th>Conexão</th><th>Preço (ida e volta)</th><th>Obs.</th>
             </tr>
           </thead>
           <tbody>
             ${sorted.map(r => `
               <tr>
                 <td class="route-cell mono">VIX<span class="r">→</span>${r.destino}</td>
-                <td class="mono">${r.data_voo}</td>
+                <td class="mono">${r.data_ida}</td>
+                <td class="mono">${r.data_volta}</td>
                 <td>${r.cia_aerea}</td>
-                <td class="mono">${r.horario_saida}</td>
-                <td class="mono">${r.horario_chegada}</td>
-                <td class="mono">${r.duracao}</td>
+                <td class="mono">${r.horario_saida_ida}</td>
+                <td class="mono">${r.horario_chegada_ida}</td>
+                <td class="mono">${r.duracao_ida}</td>
                 <td class="${r.escalas === '0' ? 'stop-none' : ''}">${r.escalas === '0' ? 'direto' : r.escalas}</td>
                 <td>${r.conexao || '–'}</td>
-                <td class="price mono">${fmtBRL(r.preco_ida_reais)}</td>
+                <td class="price mono">${fmtBRL(r.preco_total_reais)}</td>
                 <td>${r.observacao || ''}</td>
               </tr>
             `).join('')}
@@ -428,7 +435,7 @@ async function main() {
   const app = document.getElementById('app');
   try {
     const text = await loadCSV();
-    const rows = parseCSV(text).filter(r => r.preco_ida_reais);
+    const rows = parseCSV(text).filter(r => r.preco_total_reais);
     if (!rows.length) throw new Error('sem linhas');
     const lastCollect = rows.map(r => r.data_coleta).sort().pop();
     document.getElementById('lastUpdate').textContent = lastCollect;
