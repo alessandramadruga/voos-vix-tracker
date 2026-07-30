@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VIX → REC / JPA — painel de passagens</title>
+<style>
+  :root {
+    --bg: #0b1220;
+    --panel: #131e2e;
+    --panel-2: #0f1a28;
+    --ink: #eaf0f4;
+    --ink-dim: #7d93a6;
+    --ink-faint: #4c6072;
+    --accent: #ff8c42;
+    --accent-ink: #2a1200;
+    --good: #3ecf8e;
+    --good-ink: #06301d;
+    --warn: #e8b93e;
+    --line: rgba(234,240,244,0.09);
+    --line-strong: rgba(234,240,244,0.16);
+    color-scheme: dark;
+  }
+  :root[data-theme="light"] {
+    --bg: #f4f6f8;
+    --panel: #ffffff;
+    --panel-2: #eef2f5;
+    --ink: #101820;
+    --ink-dim: #56697a;
+    --ink-faint: #8ea0ae;
+    --accent: #d9631c;
+    --accent-ink: #ffffff;
+    --good: #1b8a57;
+    --good-ink: #ffffff;
+    --warn: #96700a;
+    --line: rgba(16,24,32,0.09);
+    --line-strong: rgba(16,24,32,0.18);
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg: #f4f6f8;
+      --panel: #ffffff;
+      --panel-2: #eef2f5;
+      --ink: #101820;
+      --ink-dim: #56697a;
+      --ink-faint: #8ea0ae;
+      --accent: #d9631c;
+      --accent-ink: #ffffff;
+      --good: #1b8a57;
+      --good-ink: #ffffff;
+      --warn: #96700a;
+      --line: rgba(16,24,32,0.09);
+      --line-strong: rgba(16,24,32,0.18);
+      color-scheme: light;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Segoe UI", ui-sans-serif, system-ui, -apple-system, sans-serif;
+    line-height: 1.45;
+    padding: 0 0 4rem;
+  }
+  .mono {
+    font-family: ui-monospace, "Cascadia Code", "Roboto Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+  a { color: inherit; }
+
+  header.top {
+    position: sticky; top: 0; z-index: 5;
+    background: linear-gradient(180deg, var(--bg) 70%, transparent);
+    padding: 1.4rem 1.5rem 0.8rem;
+    display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.6rem 1.2rem;
+    border-bottom: 1px solid var(--line);
+  }
+  header.top h1 {
+    font-size: 1.15rem;
+    margin: 0;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    text-wrap: balance;
+    flex: 1 1 auto;
+  }
+  header.top h1 .route {
+    color: var(--accent);
+  }
+  .updated {
+    font-size: 0.78rem;
+    color: var(--ink-dim);
+    letter-spacing: 0.02em;
+  }
+  .updated .mono { color: var(--ink); }
+
+  main {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 1.6rem 1.5rem 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2.4rem;
+  }
+
+  section h2 {
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    color: var(--ink-dim);
+    margin: 0 0 0.9rem;
+    font-weight: 600;
+  }
+
+  /* --- Top 3 cards --- */
+  .top3 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    gap: 0.9rem;
+  }
+  .pick {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 1.1rem 1.15rem 1.2rem;
+    position: relative;
+    overflow: hidden;
+  }
+  .pick::before {
+    content: "";
+    position: absolute; inset: 0 0 auto 0; height: 3px;
+    background: var(--accent);
+  }
+  .pick .badge {
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--accent);
+    font-weight: 700;
+    display: block;
+    margin-bottom: 0.5rem;
+  }
+  .pick .route-line {
+    font-size: 0.82rem;
+    color: var(--ink-dim);
+    margin-bottom: 0.35rem;
+  }
+  .pick .price {
+    font-size: 1.9rem;
+    font-weight: 700;
+    display: block;
+    letter-spacing: -0.01em;
+  }
+  .pick .price small { font-size: 0.9rem; font-weight: 500; color: var(--ink-dim); }
+  .pick .flight-meta {
+    margin-top: 0.6rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem 0.7rem;
+    font-size: 0.78rem;
+    color: var(--ink-dim);
+  }
+  .pick .flight-meta .times { color: var(--ink); font-weight: 600; }
+  .chip {
+    display: inline-block;
+    padding: 0.08rem 0.5rem;
+    border-radius: 100px;
+    font-size: 0.7rem;
+    border: 1px solid var(--line-strong);
+    color: var(--ink-dim);
+  }
+  .chip.direct { color: var(--good); border-color: var(--good); }
+
+  /* --- Daily strip --- */
+  .strip-group { margin-bottom: 1.1rem; }
+  .strip-group:last-child { margin-bottom: 0; }
+  .strip-group .route-label {
+    font-size: 0.8rem; font-weight: 700; margin-bottom: 0.5rem; color: var(--ink);
+  }
+  .strip {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(84px, 1fr);
+    gap: 0.5rem;
+    overflow-x: auto;
+    padding-bottom: 0.3rem;
+  }
+  .day {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 0.6rem 0.5rem;
+    text-align: center;
+  }
+  .day .date {
+    font-size: 0.68rem;
+    color: var(--ink-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+  .day .price {
+    font-size: 1rem;
+    font-weight: 700;
+    margin-top: 0.3rem;
+    display: block;
+  }
+  .day.empty {
+    border-style: dashed;
+    color: var(--ink-faint);
+  }
+  .day.empty .price { color: var(--ink-faint); font-weight: 500; font-size: 0.75rem; }
+  .day.cheapest .price { color: var(--good); }
+
+  /* --- Table --- */
+  .table-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+  }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    min-width: 760px;
+    font-size: 0.85rem;
+  }
+  thead th {
+    text-align: left;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--ink-dim);
+    padding: 0.7rem 0.8rem;
+    border-bottom: 1px solid var(--line-strong);
+    background: var(--panel-2);
+    position: sticky; top: 0;
+  }
+  tbody td {
+    padding: 0.55rem 0.8rem;
+    border-bottom: 1px solid var(--line);
+    white-space: nowrap;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: var(--panel); }
+  td.price { font-weight: 700; }
+  td.route-cell .r { color: var(--ink-dim); }
+  .stop-none { color: var(--good); }
+
+  footer {
+    max-width: 1080px;
+    margin: 2.4rem auto 0;
+    padding: 1rem 1.5rem 0;
+    border-top: 1px solid var(--line);
+    font-size: 0.76rem;
+    color: var(--ink-dim);
+  }
+  footer code { font-family: inherit; }
+
+  .loading, .error {
+    padding: 2rem 1.5rem; color: var(--ink-dim); font-size: 0.85rem;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .pick, .day { transition: transform 0.15s ease; }
+    .pick:hover { transform: translateY(-2px); }
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <h1>Vitória (VIX) → <span class="route">Recife</span> / <span class="route">João Pessoa</span></h1>
+  <div class="updated">Última coleta: <span class="mono" id="lastUpdate">—</span></div>
+</header>
+
+<main id="app">
+  <div class="loading">Carregando dados_voos.csv…</div>
+</main>
+
+<footer>
+  Preços de tarifa base (inclui 1 item pessoal + bagagem de mão conforme franquia da companhia; não inclui despacho de mala). Fonte: buscas manuais e verificação automática diária às 07h. Dados de <code>dados_voos.csv</code> neste repositório.
+</footer>
+
+<script>
+async function loadCSV() {
+  const res = await fetch('./dados_voos.csv', { cache: 'no-store' });
+  if (!res.ok) throw new Error('CSV não encontrado');
+  return res.text();
+}
+
+function parseCSV(text) {
+  const lines = text.trim().split(/\r?\n/);
+  const headers = splitLine(lines[0]);
+  return lines.slice(1).filter(l => l.trim().length).map(line => {
+    const cells = splitLine(line);
+    const row = {};
+    headers.forEach((h, i) => row[h] = (cells[i] ?? '').trim());
+    return row;
+  });
+}
+
+function splitLine(line) {
+  const out = []; let cur = ''; let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === '"') { inQuotes = !inQuotes; continue; }
+    if (c === ',' && !inQuotes) { out.push(cur); cur = ''; continue; }
+    cur += c;
+  }
+  out.push(cur);
+  return out;
+}
+
+function durationToMinutes(d) {
+  const m = d.match(/(\d+)h(\d+)?/);
+  if (!m) return 9999;
+  return parseInt(m[1], 10) * 60 + parseInt(m[2] || '0', 10);
+}
+
+function score(row) {
+  const price = parseFloat(row.preco_ida_reais) || 0;
+  const mins = durationToMinutes(row.duracao);
+  const stops = parseInt(row.escalas, 10) || 0;
+  return price + mins * 3 + stops * 150;
+}
+
+function fmtBRL(n) {
+  return 'R$ ' + Number(n).toLocaleString('pt-BR', { minimumFractionDigits: 0 });
+}
+
+function destName(code) {
+  return code === 'REC' ? 'Recife' : code === 'JPA' ? 'João Pessoa' : code;
+}
+
+function renderTop3(rows) {
+  const ranked = [...rows].sort((a, b) => score(a) - score(b)).slice(0, 3);
+  const labels = ['Melhor custo-benefício', '2º melhor', '3º melhor'];
+  return `
+    <section>
+      <h2>Top 3 melhor custo-benefício (todas as rotas e datas coletadas)</h2>
+      <div class="top3">
+        ${ranked.map((r, i) => `
+          <div class="pick">
+            <span class="badge">${labels[i]}</span>
+            <div class="route-line">VIX → ${destName(r.destino)} · ${new Date(r.data_voo + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}</div>
+            <span class="price">${fmtBRL(r.preco_ida_reais)} <small>ida</small></span>
+            <div class="flight-meta">
+              <span class="times">${r.horario_saida}–${r.horario_chegada}</span>
+              <span>${r.cia_aerea}</span>
+              <span class="chip ${r.escalas === '0' ? 'direct' : ''}">${r.escalas === '0' ? 'sem escalas' : (r.conexao || '1 parada')}</span>
+              <span>${r.duracao}</span>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    </section>
+  `;
+}
+
+function renderStrip(rows) {
+  const byRoute = groupBy(rows, r => r.destino);
+  return `
+    <section>
+      <h2>Valor diário (menor preço encontrado por dia)</h2>
+      ${Object.entries(byRoute).map(([dest, rs]) => {
+        const byDate = groupBy(rs, r => r.data_voo);
+        const dates = Object.keys(byDate).sort();
+        const globalMin = Math.min(...rs.map(r => parseFloat(r.preco_ida_reais)));
+        return `
+          <div class="strip-group">
+            <div class="route-label">VIX → ${destName(dest)}</div>
+            <div class="strip">
+              ${dates.map(d => {
+                const cheapest = Math.min(...byDate[d].map(r => parseFloat(r.preco_ida_reais)));
+                const isMin = cheapest === globalMin;
+                const label = new Date(d + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+                return `<div class="day ${isMin ? 'cheapest' : ''}"><div class="date">${label}</div><span class="price mono">${fmtBRL(cheapest)}</span></div>`;
+              }).join('')}
+            </div>
+          </div>
+        `;
+      }).join('')}
+    </section>
+  `;
+}
+
+function renderTable(rows) {
+  const sorted = [...rows].sort((a, b) => (a.destino + a.data_voo).localeCompare(b.destino + b.data_voo) || parseFloat(a.preco_ida_reais) - parseFloat(b.preco_ida_reais));
+  return `
+    <section>
+      <h2>Todos os voos coletados</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Rota</th><th>Data voo</th><th>Cia</th><th>Saída</th><th>Chegada</th>
+              <th>Duração</th><th>Escalas</th><th>Conexão</th><th>Preço (ida)</th><th>Obs.</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${sorted.map(r => `
+              <tr>
+                <td class="route-cell mono">VIX<span class="r">→</span>${r.destino}</td>
+                <td class="mono">${r.data_voo}</td>
+                <td>${r.cia_aerea}</td>
+                <td class="mono">${r.horario_saida}</td>
+                <td class="mono">${r.horario_chegada}</td>
+                <td class="mono">${r.duracao}</td>
+                <td class="${r.escalas === '0' ? 'stop-none' : ''}">${r.escalas === '0' ? 'direto' : r.escalas}</td>
+                <td>${r.conexao || '–'}</td>
+                <td class="price mono">${fmtBRL(r.preco_ida_reais)}</td>
+                <td>${r.observacao || ''}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  `;
+}
+
+function groupBy(arr, fn) {
+  return arr.reduce((acc, x) => { const k = fn(x); (acc[k] ||= []).push(x); return acc; }, {});
+}
+
+async function main() {
+  const app = document.getElementById('app');
+  try {
+    const text = await loadCSV();
+    const rows = parseCSV(text).filter(r => r.preco_ida_reais);
+    if (!rows.length) throw new Error('sem linhas');
+    const lastCollect = rows.map(r => r.data_coleta).sort().pop();
+    document.getElementById('lastUpdate').textContent = lastCollect;
+    app.innerHTML = renderTop3(rows) + renderStrip(rows) + renderTable(rows);
+  } catch (e) {
+    app.innerHTML = `<div class="error">Não foi possível carregar dados_voos.csv (${e.message}). Se você abriu este arquivo direto do disco, sirva a pasta com um servidor local ou acesse via GitHub Pages.</div>`;
+  }
+}
+main();
+</script>
+
+</body>
+</html>
