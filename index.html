@@ -259,6 +259,8 @@
   }
   .flight-row:last-child { border-bottom: none; }
   .flight-row:hover { background: var(--panel-2); }
+  .flight-row .f-coleta { font-size: 0.7rem; color: var(--ink-faint); min-width: 2.6rem; }
+  .flight-row .f-coleta-current { color: var(--good); font-weight: 700; }
   .flight-row .f-cia { font-weight: 600; min-width: 4.5rem; }
   .flight-row .f-time { color: var(--ink); }
   .flight-row .f-dur, .flight-row .f-stop { color: var(--ink-dim); font-size: 0.85rem; }
@@ -358,6 +360,14 @@ function destName(code) {
 
 function comboKey(r) { return `${r.destino} ${fmtDate(r.data_ida)}→${fmtDate(r.data_volta)}`; }
 
+function latestOnly(rows) {
+  const byCombo = groupBy(rows, comboKey);
+  return Object.values(byCombo).flatMap(rs => {
+    const latest = rs.reduce((max, r) => r.data_coleta > max ? r.data_coleta : max, rs[0].data_coleta);
+    return rs.filter(r => r.data_coleta === latest);
+  });
+}
+
 function flightsUrl(destino, dataIda, dataVolta) {
   const [y1, m1, d1] = dataIda.split('-');
   const [y2, m2, d2] = dataVolta.split('-');
@@ -426,8 +436,9 @@ function renderTable(rows) {
       <h2>Todos os voos coletados</h2>
       <div class="flight-list">
         ${groups.map(g => {
-          const rs = [...byGroup[g]].sort((a, b) => parseFloat(a.preco_total_reais) - parseFloat(b.preco_total_reais));
+          const rs = [...byGroup[g]].sort((a, b) => b.data_coleta.localeCompare(a.data_coleta) || parseFloat(a.preco_total_reais) - parseFloat(b.preco_total_reais));
           const first = rs[0];
+          const latestColeta = rs.reduce((max, r) => r.data_coleta > max ? r.data_coleta : max, rs[0].data_coleta);
           return `
             <div class="flight-group-label">
               <span>VIX → ${destName(first.destino)} · ida ${fmtDate(first.data_ida)} / volta ${fmtDate(first.data_volta)}</span>
@@ -435,6 +446,7 @@ function renderTable(rows) {
             </div>
             ${rs.map(r => `
               <div class="flight-row">
+                <span class="f-coleta mono ${r.data_coleta === latestColeta ? 'f-coleta-current' : ''}">${fmtDate(r.data_coleta)}</span>
                 <span class="f-cia">${r.cia_aerea}</span>
                 <span class="f-time mono">${r.horario_saida_ida}–${r.horario_chegada_ida}</span>
                 <span class="f-dur">${r.duracao_ida}</span>
@@ -462,7 +474,8 @@ async function main() {
     if (!rows.length) throw new Error('sem linhas');
     const lastCollect = rows.map(r => r.data_coleta).sort().pop();
     document.getElementById('lastUpdate').textContent = lastCollect;
-    app.innerHTML = renderTop3(rows) + renderStrip(rows) + renderTable(rows);
+    const current = latestOnly(rows);
+    app.innerHTML = renderTop3(current) + renderStrip(current) + renderTable(rows);
   } catch (e) {
     app.innerHTML = `<div class="error">Não foi possível carregar dados_voos.csv (${e.message}). Se você abriu este arquivo direto do disco, sirva a pasta com um servidor local ou acesse via GitHub Pages.</div>`;
   }
