@@ -320,7 +320,7 @@ function durationToMinutes(d) {
 
 function score(row) {
   const price = parseFloat(row.preco_total_reais) || 0;
-  const mins = durationToMinutes(row.duracao);
+  const mins = durationToMinutes(row.duracao_ida);
   const stops = parseInt(row.escalas, 10) || 0;
   return price + mins * 3 + stops * 150;
 }
