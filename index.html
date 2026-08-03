@@ -213,38 +213,38 @@
   .day.empty .price { color: var(--ink-faint); font-weight: 500; font-size: 0.75rem; }
   .day.cheapest .price { color: var(--good); }
 
-  /* --- Table --- */
-  .table-wrap {
-    overflow-x: auto;
+  /* --- Flight list (no horizontal scroll at any width) --- */
+  .flight-list {
     border: 1px solid var(--line);
     border-radius: 10px;
+    overflow: hidden;
   }
-  table {
-    border-collapse: collapse;
-    width: 100%;
-    min-width: 760px;
-    font-size: 0.85rem;
-  }
-  thead th {
-    text-align: left;
-    font-size: 0.7rem;
+  .flight-group-label {
+    font-size: 0.72rem;
     text-transform: uppercase;
     letter-spacing: 0.06em;
     color: var(--ink-dim);
-    padding: 0.7rem 0.8rem;
-    border-bottom: 1px solid var(--line-strong);
+    padding: 0.6rem 1rem;
     background: var(--panel-2);
-    position: sticky; top: 0;
+    border-bottom: 1px solid var(--line-strong);
   }
-  tbody td {
-    padding: 0.55rem 0.8rem;
+  .flight-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    column-gap: 1.1rem;
+    row-gap: 0.15rem;
+    padding: 0.65rem 1rem;
     border-bottom: 1px solid var(--line);
-    white-space: nowrap;
+    background: var(--panel);
   }
-  tbody tr:last-child td { border-bottom: none; }
-  tbody tr:hover { background: var(--panel); }
-  td.price { font-weight: 700; }
-  td.route-cell .r { color: var(--ink-dim); }
+  .flight-row:last-child { border-bottom: none; }
+  .flight-row:hover { background: var(--panel-2); }
+  .flight-row .f-cia { font-weight: 600; min-width: 4.5rem; }
+  .flight-row .f-time { color: var(--ink); }
+  .flight-row .f-dur, .flight-row .f-stop { color: var(--ink-dim); font-size: 0.85rem; }
+  .flight-row .f-price { font-weight: 700; margin-left: auto; }
+  .flight-row .f-obs { flex-basis: 100%; color: var(--ink-dim); font-size: 0.8rem; }
   .stop-none { color: var(--good); }
 
   footer {
@@ -392,36 +392,29 @@ function renderStrip(rows) {
 }
 
 function renderTable(rows) {
-  const sorted = [...rows].sort((a, b) => (a.destino + a.data_ida).localeCompare(b.destino + b.data_ida) || parseFloat(a.preco_total_reais) - parseFloat(b.preco_total_reais));
+  const byGroup = groupBy(rows, comboKey);
+  const groups = Object.keys(byGroup).sort();
   return `
     <section>
       <h2>Todos os voos coletados</h2>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Rota</th><th>Ida</th><th>Volta</th><th>Cia</th><th>Saída (ida)</th><th>Chegada (ida)</th>
-              <th>Duração (ida)</th><th>Escalas</th><th>Conexão</th><th>Preço (ida e volta)</th><th>Obs.</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${sorted.map(r => `
-              <tr>
-                <td class="route-cell mono">VIX<span class="r">→</span>${r.destino}</td>
-                <td class="mono">${r.data_ida}</td>
-                <td class="mono">${r.data_volta}</td>
-                <td>${r.cia_aerea}</td>
-                <td class="mono">${r.horario_saida_ida}</td>
-                <td class="mono">${r.horario_chegada_ida}</td>
-                <td class="mono">${r.duracao_ida}</td>
-                <td class="${r.escalas === '0' ? 'stop-none' : ''}">${r.escalas === '0' ? 'direto' : r.escalas}</td>
-                <td>${r.conexao || '–'}</td>
-                <td class="price mono">${fmtBRL(r.preco_total_reais)}</td>
-                <td>${r.observacao || ''}</td>
-              </tr>
+      <div class="flight-list">
+        ${groups.map(g => {
+          const rs = [...byGroup[g]].sort((a, b) => parseFloat(a.preco_total_reais) - parseFloat(b.preco_total_reais));
+          const first = rs[0];
+          return `
+            <div class="flight-group-label">VIX → ${destName(first.destino)} · ida ${fmtDate(first.data_ida)} / volta ${fmtDate(first.data_volta)}</div>
+            ${rs.map(r => `
+              <div class="flight-row">
+                <span class="f-cia">${r.cia_aerea}</span>
+                <span class="f-time mono">${r.horario_saida_ida}–${r.horario_chegada_ida}</span>
+                <span class="f-dur">${r.duracao_ida}</span>
+                <span class="f-stop ${r.escalas === '0' ? 'stop-none' : ''}">${r.escalas === '0' ? 'sem escalas' : (r.conexao || '1 parada')}</span>
+                <span class="f-price mono">${fmtBRL(r.preco_total_reais)}</span>
+                ${r.observacao ? `<span class="f-obs">${r.observacao}</span>` : ''}
+              </div>
             `).join('')}
-          </tbody>
-        </table>
+          `;
+        }).join('')}
       </div>
     </section>
   `;
