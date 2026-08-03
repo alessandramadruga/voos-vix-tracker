@@ -227,6 +227,25 @@
     padding: 0.6rem 1rem;
     background: var(--panel-2);
     border-bottom: 1px solid var(--line-strong);
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.75rem;
+  }
+  .book-link {
+    color: var(--accent);
+    text-decoration: none;
+    font-weight: 600;
+    white-space: nowrap;
+    text-transform: none;
+    letter-spacing: normal;
+    font-size: 0.78rem;
+  }
+  .book-link:hover, .book-link:focus-visible { text-decoration: underline; }
+  .pick .book-link {
+    display: inline-block;
+    margin-top: 0.7rem;
+    font-size: 0.8rem;
   }
   .flight-row {
     display: flex;
@@ -339,6 +358,13 @@ function destName(code) {
 
 function comboKey(r) { return `${r.destino} ${fmtDate(r.data_ida)}→${fmtDate(r.data_volta)}`; }
 
+function flightsUrl(destino, dataIda, dataVolta) {
+  const [y1, m1, d1] = dataIda.split('-');
+  const [y2, m2, d2] = dataVolta.split('-');
+  const q = `voos de Vitória para ${destName(destino)} de ${d1}/${m1}/${y1} a ${d2}/${m2}/${y2}`;
+  return 'https://www.google.com/travel/flights?q=' + encodeURIComponent(q);
+}
+
 function renderTop3(rows) {
   const ranked = [...rows].sort((a, b) => score(a) - score(b)).slice(0, 3);
   const labels = ['Melhor custo-benefício', '2º melhor', '3º melhor'];
@@ -357,6 +383,7 @@ function renderTop3(rows) {
               <span class="chip ${r.escalas === '0' ? 'direct' : ''}">${r.escalas === '0' ? 'sem escalas' : (r.conexao || '1 parada')}</span>
               <span>${r.duracao_ida}</span>
             </div>
+            <a class="book-link" href="${flightsUrl(r.destino, r.data_ida, r.data_volta)}" target="_blank" rel="noopener">Ver oferta e reservar →</a>
           </div>
         `).join('')}
       </div>
@@ -402,7 +429,10 @@ function renderTable(rows) {
           const rs = [...byGroup[g]].sort((a, b) => parseFloat(a.preco_total_reais) - parseFloat(b.preco_total_reais));
           const first = rs[0];
           return `
-            <div class="flight-group-label">VIX → ${destName(first.destino)} · ida ${fmtDate(first.data_ida)} / volta ${fmtDate(first.data_volta)}</div>
+            <div class="flight-group-label">
+              <span>VIX → ${destName(first.destino)} · ida ${fmtDate(first.data_ida)} / volta ${fmtDate(first.data_volta)}</span>
+              <a class="book-link" href="${flightsUrl(first.destino, first.data_ida, first.data_volta)}" target="_blank" rel="noopener">Ver ofertas →</a>
+            </div>
             ${rs.map(r => `
               <div class="flight-row">
                 <span class="f-cia">${r.cia_aerea}</span>
