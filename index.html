@@ -266,8 +266,7 @@
   .f-total-jpa { font-weight: 500; font-size: 0.78rem; color: var(--ink-dim); }
   .f-status { font-size: 0.72rem; padding: 0.05rem 0.5rem; border-radius: 100px; border: 1px solid var(--line-strong); }
   .f-status.status-segura { color: var(--good); border-color: var(--good); }
-  .f-status.status-apertada { color: var(--warn); border-color: var(--warn); }
-  .f-status.status-perde { color: var(--ink-faint); border-color: var(--ink-faint); text-decoration: line-through; }
+  .f-status.status-espera { color: var(--warn); border-color: var(--warn); }
   .stop-none { color: var(--good); }
 
   footer {
@@ -342,16 +341,43 @@ function durationToMinutes(d) {
 }
 
 const GROUND_COST = 298; // Uber aeroporto-rodoviária (R$70 x2) + ônibus Recife-João Pessoa (R$79 x2), ida e volta
-const GROUND_EXTRA_MIN = 165; // ~30min Uber + espera/baldeação + ~2h de ônibus
+const UBER_MIN = 30; // aeroporto REC -> rodoviária TIP
+const BUS_RIDE_MIN = 120; // TIP -> João Pessoa
+// Horários de saída do TIP (Recife) para João Pessoa, em minutos desde 00:00
+const BUS_TIMES = [105, 330, 360, 420, 480, 540, 600, 660, 720, 780, 840, 900, 960, 1020, 1080, 1170]; // 01:45, 05:30, 06:00..18:00 de hora em hora, 19:30
+
+function busInfo(r) {
+  if (r.destino !== 'REC') return null;
+  const nextDayFlight = r.horario_chegada_ida.includes('+1');
+  const [h, m] = r.horario_chegada_ida.replace('+1', '').split(':').map(Number);
+  const arrivalMin = (h * 60 + m) + (nextDayFlight ? 24 * 60 : 0);
+  const readyAt = arrivalMin + UBER_MIN;
+  const readyMod = readyAt % (24 * 60);
+  let nextBus = BUS_TIMES.find(t => t >= readyMod);
+  let waitMin;
+  if (nextBus !== undefined) {
+    waitMin = nextBus - readyMod;
+  } else {
+    nextBus = BUS_TIMES[0];
+    waitMin = (24 * 60 - readyMod) + nextBus;
+  }
+  return { status: waitMin > 90 ? 'espera' : 'segura', waitMin, busTime: nextBus };
+}
 
 function arrivalStatus(r) {
-  if (r.destino !== 'REC') return null;
-  const nextDay = r.horario_chegada_ida.includes('+1');
-  const [h, m] = r.horario_chegada_ida.replace('+1', '').split(':').map(Number);
-  const mins = h * 60 + m;
-  if (nextDay || mins > 21 * 60) return 'perde';
-  if (mins > 17 * 60) return 'apertada';
-  return 'segura';
+  return busInfo(r)?.status ?? null;
+}
+
+function fmtHHMM(mins) {
+  const h = Math.floor(mins / 60) % 24;
+  const m = mins % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+function fmtWait(mins) {
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return h > 0 ? `${h}h${String(m).padStart(2, '0')}` : `${m}min`;
 }
 
 function totalToJPA(row) {
@@ -361,16 +387,16 @@ function totalToJPA(row) {
 
 function totalDurationMin(row) {
   const base = durationToMinutes(row.duracao_ida);
-  return row.destino === 'REC' ? base + GROUND_EXTRA_MIN : base;
+  if (row.destino !== 'REC') return base;
+  const info = busInfo(row);
+  return base + UBER_MIN + info.waitMin + BUS_RIDE_MIN;
 }
 
 function score(row) {
   const price = totalToJPA(row);
   const mins = totalDurationMin(row);
   const stops = parseInt(row.escalas, 10) || 0;
-  const status = arrivalStatus(row);
-  const riskPenalty = status === 'perde' ? 999999 : status === 'apertada' ? 400 : 0;
-  return price + mins * 3 + stops * 150 + riskPenalty;
+  return price + mins * 3 + stops * 150;
 }
 
 function fmtBRL(n) {
@@ -411,7 +437,7 @@ function renderTop3(rows) {
       <div class="top3">
         ${ranked.map((r, i) => {
           const viaRec = r.destino === 'REC';
-          const status = arrivalStatus(r);
+          const info = busInfo(r);
           return `
           <div class="pick">
             <span class="badge">${labels[i]}</span>
@@ -423,7 +449,7 @@ function renderTop3(rows) {
               <span class="chip ${r.escalas === '0' ? 'direct' : ''}">${r.escalas === '0' ? 'sem escalas' : (r.conexao || '1 parada')}</span>
               <span>${r.duracao_ida}</span>
               ${viaRec ? `<span class="chip">+ Uber R$70 e ônibus R$79 (ida e volta: +R$${GROUND_COST})</span>` : ''}
-              ${status === 'apertada' ? `<span class="chip risk">chegada apertada p/ ônibus</span>` : ''}
+              ${viaRec ? `<span class="chip ${info.status === 'espera' ? 'risk' : ''}">ônibus ${fmtHHMM(info.busTime)}${info.status === 'espera' ? ` (espera ${fmtWait(info.waitMin)})` : ''}</span>` : ''}
             </div>
             <a class="book-link" href="${flightsUrl(r.destino, r.data_ida, r.data_volta)}" target="_blank" rel="noopener">Ver oferta e reservar →</a>
           </div>
@@ -454,12 +480,12 @@ function renderStrategyCompare(rows) {
               <div class="strategy-title">Ida ${fmtDate(first.data_ida)} · Volta ${fmtDate(first.data_volta)}</div>
               ${bestJpa ? `<div class="strategy-row"><span>Direto p/ João Pessoa</span><span class="mono">${fmtBRL(totalToJPA(bestJpa))}</span></div>` : ''}
               ${bestRecSafe ? `<div class="strategy-row good"><span>Recife + terrestre (chegada com folga)</span><span class="mono">${fmtBRL(totalToJPA(bestRecSafe))}</span></div>` : ''}
-              ${bestRecAny && bestRecAny !== bestRecSafe ? `<div class="strategy-row risk"><span>Recife + terrestre, mais barato (${arrivalStatus(bestRecAny) === 'perde' ? 'perde o último ônibus' : 'chegada apertada'})</span><span class="mono">${fmtBRL(totalToJPA(bestRecAny))}</span></div>` : ''}
+              ${bestRecAny && bestRecAny !== bestRecSafe ? `<div class="strategy-row risk"><span>Recife + terrestre, mais barato (ônibus das ${fmtHHMM(busInfo(bestRecAny).busTime)}, espera ${fmtWait(busInfo(bestRecAny).waitMin)})</span><span class="mono">${fmtBRL(totalToJPA(bestRecAny))}</span></div>` : ''}
             </div>
           `;
         }).join('')}
       </div>
-      <p class="strategy-note">Terrestre = Uber aeroporto→rodoviária TIP (~R$70, ida e volta R$140) + ônibus Recife→João Pessoa (~2h, ~R$79, ida e volta R$158). Ônibus roda cerca de 5x/dia — confirme o horário exato antes de comprar se a chegada em Recife for depois das 17h.</p>
+      <p class="strategy-note">Terrestre = Uber aeroporto→rodoviária TIP (~R$70, ida e volta R$140) + ônibus Recife→João Pessoa (~2h, ~R$79, ida e volta R$158). Ônibus saem do TIP às 01:45, 05:30 e depois de hora em hora das 06h às 18h, mais um às 19:30 — o único intervalo maior é entre 19:30 e 01:45. Fora dessa janela a espera é de no máximo ~1h.</p>
     </section>
   `;
 }
@@ -482,7 +508,7 @@ function renderTable(rows) {
               <a class="book-link" href="${flightsUrl(first.destino, first.data_ida, first.data_volta)}" target="_blank" rel="noopener">Ver ofertas →</a>
             </div>
             ${rs.map(r => {
-              const status = arrivalStatus(r);
+              const info = busInfo(r);
               return `
               <div class="flight-row">
                 <span class="f-coleta mono ${r.data_coleta === latestColeta ? 'f-coleta-current' : ''}">${fmtDate(r.data_coleta)}</span>
@@ -491,7 +517,7 @@ function renderTable(rows) {
                 <span class="f-dur">${r.duracao_ida}</span>
                 <span class="f-stop ${r.escalas === '0' ? 'stop-none' : ''}">${r.escalas === '0' ? 'sem escalas' : (r.conexao || '1 parada')}</span>
                 <span class="f-price mono">${fmtBRL(r.preco_total_reais)}${viaRec ? ` <span class="f-total-jpa">(${fmtBRL(totalToJPA(r))} até JPA)</span>` : ''}</span>
-                ${status ? `<span class="f-status status-${status}">${status === 'segura' ? 'chegada com folga' : status === 'apertada' ? 'chegada apertada' : 'perde o ônibus'}</span>` : ''}
+                ${info ? `<span class="f-status status-${info.status}">ônibus ${fmtHHMM(info.busTime)}${info.status === 'espera' ? ` (espera ${fmtWait(info.waitMin)})` : ''}</span>` : ''}
                 ${r.observacao ? `<span class="f-obs">${r.observacao}</span>` : ''}
               </div>
             `; }).join('')}
