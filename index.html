@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>VIX → REC / JPA — painel de passagens</title>
+<title>VIX → João Pessoa — painel de passagens</title>
 <style>
   :root {
     --bg: #0b1220;
@@ -172,46 +172,43 @@
     color: var(--ink-dim);
   }
   .chip.direct { color: var(--good); border-color: var(--good); }
+  .chip.risk { color: var(--warn); border-color: var(--warn); }
 
-  /* --- Daily strip --- */
-  .strip-group { margin-bottom: 1.1rem; }
-  .strip-group:last-child { margin-bottom: 0; }
-  .strip-group .route-label {
-    font-size: 0.8rem; font-weight: 700; margin-bottom: 0.5rem; color: var(--ink);
-  }
-  .strip {
+  /* --- Strategy comparison (direto vs. via Recife) --- */
+  .strategy-grid {
     display: grid;
-    grid-auto-flow: column;
-    grid-auto-columns: minmax(84px, 1fr);
-    gap: 0.5rem;
-    overflow-x: auto;
-    padding-bottom: 0.3rem;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 0.9rem;
   }
-  .day {
+  .strategy-card {
     background: var(--panel);
     border: 1px solid var(--line);
-    border-radius: 8px;
-    padding: 0.6rem 0.5rem;
-    text-align: center;
+    border-radius: 10px;
+    padding: 0.9rem 1rem;
   }
-  .day .date {
-    font-size: 0.68rem;
-    color: var(--ink-dim);
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-  }
-  .day .price {
-    font-size: 1rem;
+  .strategy-title {
+    font-size: 0.8rem;
     font-weight: 700;
-    margin-top: 0.3rem;
-    display: block;
+    margin-bottom: 0.6rem;
   }
-  .day.empty {
-    border-style: dashed;
-    color: var(--ink-faint);
+  .strategy-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.8rem;
+    padding: 0.35rem 0;
+    font-size: 0.85rem;
+    color: var(--ink-dim);
+    border-top: 1px solid var(--line);
   }
-  .day.empty .price { color: var(--ink-faint); font-weight: 500; font-size: 0.75rem; }
-  .day.cheapest .price { color: var(--good); }
+  .strategy-row:first-of-type { border-top: none; }
+  .strategy-row span:last-child { color: var(--ink); font-weight: 700; }
+  .strategy-row.good span:last-child { color: var(--good); }
+  .strategy-row.risk span:last-child { color: var(--warn); }
+  .strategy-note {
+    margin: 0.9rem 0 0;
+    font-size: 0.78rem;
+    color: var(--ink-dim);
+  }
 
   /* --- Flight list (no horizontal scroll at any width) --- */
   .flight-list {
@@ -266,6 +263,11 @@
   .flight-row .f-dur, .flight-row .f-stop { color: var(--ink-dim); font-size: 0.85rem; }
   .flight-row .f-price { font-weight: 700; margin-left: auto; }
   .flight-row .f-obs { flex-basis: 100%; color: var(--ink-dim); font-size: 0.8rem; }
+  .f-total-jpa { font-weight: 500; font-size: 0.78rem; color: var(--ink-dim); }
+  .f-status { font-size: 0.72rem; padding: 0.05rem 0.5rem; border-radius: 100px; border: 1px solid var(--line-strong); }
+  .f-status.status-segura { color: var(--good); border-color: var(--good); }
+  .f-status.status-apertada { color: var(--warn); border-color: var(--warn); }
+  .f-status.status-perde { color: var(--ink-faint); border-color: var(--ink-faint); text-decoration: line-through; }
   .stop-none { color: var(--good); }
 
   footer {
@@ -291,7 +293,7 @@
 <body>
 
 <header class="top">
-  <h1>Vitória (VIX) → <span class="route">Recife</span> / <span class="route">João Pessoa</span></h1>
+  <h1>Vitória (VIX) → <span class="route">João Pessoa</span> (direto ou via Recife)</h1>
   <div class="updated">Última coleta: <span class="mono" id="lastUpdate">—</span></div>
 </header>
 
@@ -339,11 +341,36 @@ function durationToMinutes(d) {
   return parseInt(m[1], 10) * 60 + parseInt(m[2] || '0', 10);
 }
 
-function score(row) {
+const GROUND_COST = 298; // Uber aeroporto-rodoviária (R$70 x2) + ônibus Recife-João Pessoa (R$79 x2), ida e volta
+const GROUND_EXTRA_MIN = 165; // ~30min Uber + espera/baldeação + ~2h de ônibus
+
+function arrivalStatus(r) {
+  if (r.destino !== 'REC') return null;
+  const nextDay = r.horario_chegada_ida.includes('+1');
+  const [h, m] = r.horario_chegada_ida.replace('+1', '').split(':').map(Number);
+  const mins = h * 60 + m;
+  if (nextDay || mins > 21 * 60) return 'perde';
+  if (mins > 17 * 60) return 'apertada';
+  return 'segura';
+}
+
+function totalToJPA(row) {
   const price = parseFloat(row.preco_total_reais) || 0;
-  const mins = durationToMinutes(row.duracao_ida);
+  return row.destino === 'REC' ? price + GROUND_COST : price;
+}
+
+function totalDurationMin(row) {
+  const base = durationToMinutes(row.duracao_ida);
+  return row.destino === 'REC' ? base + GROUND_EXTRA_MIN : base;
+}
+
+function score(row) {
+  const price = totalToJPA(row);
+  const mins = totalDurationMin(row);
   const stops = parseInt(row.escalas, 10) || 0;
-  return price + mins * 3 + stops * 150;
+  const status = arrivalStatus(row);
+  const riskPenalty = status === 'perde' ? 999999 : status === 'apertada' ? 400 : 0;
+  return price + mins * 3 + stops * 150 + riskPenalty;
 }
 
 function fmtBRL(n) {
@@ -380,50 +407,59 @@ function renderTop3(rows) {
   const labels = ['Melhor custo-benefício', '2º melhor', '3º melhor'];
   return `
     <section>
-      <h2>Top 3 melhor custo-benefício (ida e volta, ambas as janelas)</h2>
+      <h2>Top 3 melhor forma de chegar a João Pessoa (ida e volta)</h2>
       <div class="top3">
-        ${ranked.map((r, i) => `
+        ${ranked.map((r, i) => {
+          const viaRec = r.destino === 'REC';
+          const status = arrivalStatus(r);
+          return `
           <div class="pick">
             <span class="badge">${labels[i]}</span>
-            <div class="route-line">VIX → ${destName(r.destino)} · ida ${fmtDate(r.data_ida)} / volta ${fmtDate(r.data_volta)}</div>
-            <span class="price">${fmtBRL(r.preco_total_reais)} <small>ida e volta</small></span>
+            <div class="route-line">VIX → João Pessoa${viaRec ? ' (via Recife)' : ' (direto)'} · ida ${fmtDate(r.data_ida)} / volta ${fmtDate(r.data_volta)}</div>
+            <span class="price">${fmtBRL(totalToJPA(r))} <small>ida e volta</small></span>
             <div class="flight-meta">
               <span class="times">${r.horario_saida_ida}–${r.horario_chegada_ida}</span>
               <span>${r.cia_aerea}</span>
               <span class="chip ${r.escalas === '0' ? 'direct' : ''}">${r.escalas === '0' ? 'sem escalas' : (r.conexao || '1 parada')}</span>
               <span>${r.duracao_ida}</span>
+              ${viaRec ? `<span class="chip">+ Uber R$70 e ônibus R$79 (ida e volta: +R$${GROUND_COST})</span>` : ''}
+              ${status === 'apertada' ? `<span class="chip risk">chegada apertada p/ ônibus</span>` : ''}
             </div>
             <a class="book-link" href="${flightsUrl(r.destino, r.data_ida, r.data_volta)}" target="_blank" rel="noopener">Ver oferta e reservar →</a>
           </div>
-        `).join('')}
+        `; }).join('')}
       </div>
     </section>
   `;
 }
 
-function renderStrip(rows) {
-  const byRoute = groupBy(rows, r => r.destino);
+function renderStrategyCompare(rows) {
+  const byWindow = groupBy(rows, r => `${r.data_ida}|${r.data_volta}`);
+  const windows = Object.keys(byWindow).sort();
   return `
     <section>
-      <h2>Comparativo de preço por janela de datas (ida e volta, menor preço)</h2>
-      ${Object.entries(byRoute).map(([dest, rs]) => {
-        const byCombo = groupBy(rs, comboKey);
-        const combos = Object.keys(byCombo).sort();
-        const globalMin = Math.min(...rs.map(r => parseFloat(r.preco_total_reais)));
-        return `
-          <div class="strip-group">
-            <div class="route-label">VIX → ${destName(dest)}</div>
-            <div class="strip">
-              ${combos.map(c => {
-                const cheapest = Math.min(...byCombo[c].map(r => parseFloat(r.preco_total_reais)));
-                const isMin = cheapest === globalMin;
-                const label = c.split(' ')[1];
-                return `<div class="day ${isMin ? 'cheapest' : ''}"><div class="date">${label}</div><span class="price mono">${fmtBRL(cheapest)}</span></div>`;
-              }).join('')}
+      <h2>Direto para João Pessoa vs. Recife + Uber + ônibus</h2>
+      <div class="strategy-grid">
+        ${windows.map(w => {
+          const rs = byWindow[w];
+          const first = rs[0];
+          const jpaRows = rs.filter(r => r.destino === 'JPA');
+          const recRows = rs.filter(r => r.destino === 'REC');
+          const bestJpa = jpaRows.length ? jpaRows.reduce((a, b) => totalToJPA(a) < totalToJPA(b) ? a : b) : null;
+          const recSafe = recRows.filter(r => arrivalStatus(r) === 'segura');
+          const bestRecSafe = recSafe.length ? recSafe.reduce((a, b) => totalToJPA(a) < totalToJPA(b) ? a : b) : null;
+          const bestRecAny = recRows.length ? recRows.reduce((a, b) => totalToJPA(a) < totalToJPA(b) ? a : b) : null;
+          return `
+            <div class="strategy-card">
+              <div class="strategy-title">Ida ${fmtDate(first.data_ida)} · Volta ${fmtDate(first.data_volta)}</div>
+              ${bestJpa ? `<div class="strategy-row"><span>Direto p/ João Pessoa</span><span class="mono">${fmtBRL(totalToJPA(bestJpa))}</span></div>` : ''}
+              ${bestRecSafe ? `<div class="strategy-row good"><span>Recife + terrestre (chegada com folga)</span><span class="mono">${fmtBRL(totalToJPA(bestRecSafe))}</span></div>` : ''}
+              ${bestRecAny && bestRecAny !== bestRecSafe ? `<div class="strategy-row risk"><span>Recife + terrestre, mais barato (${arrivalStatus(bestRecAny) === 'perde' ? 'perde o último ônibus' : 'chegada apertada'})</span><span class="mono">${fmtBRL(totalToJPA(bestRecAny))}</span></div>` : ''}
             </div>
-          </div>
-        `;
-      }).join('')}
+          `;
+        }).join('')}
+      </div>
+      <p class="strategy-note">Terrestre = Uber aeroporto→rodoviária TIP (~R$70, ida e volta R$140) + ônibus Recife→João Pessoa (~2h, ~R$79, ida e volta R$158). Ônibus roda cerca de 5x/dia — confirme o horário exato antes de comprar se a chegada em Recife for depois das 17h.</p>
     </section>
   `;
 }
@@ -439,22 +475,26 @@ function renderTable(rows) {
           const rs = [...byGroup[g]].sort((a, b) => b.data_coleta.localeCompare(a.data_coleta) || parseFloat(a.preco_total_reais) - parseFloat(b.preco_total_reais));
           const first = rs[0];
           const latestColeta = rs.reduce((max, r) => r.data_coleta > max ? r.data_coleta : max, rs[0].data_coleta);
+          const viaRec = first.destino === 'REC';
           return `
             <div class="flight-group-label">
-              <span>VIX → ${destName(first.destino)} · ida ${fmtDate(first.data_ida)} / volta ${fmtDate(first.data_volta)}</span>
+              <span>VIX → ${destName(first.destino)}${viaRec ? ' (+ Uber e ônibus até João Pessoa)' : ''} · ida ${fmtDate(first.data_ida)} / volta ${fmtDate(first.data_volta)}</span>
               <a class="book-link" href="${flightsUrl(first.destino, first.data_ida, first.data_volta)}" target="_blank" rel="noopener">Ver ofertas →</a>
             </div>
-            ${rs.map(r => `
+            ${rs.map(r => {
+              const status = arrivalStatus(r);
+              return `
               <div class="flight-row">
                 <span class="f-coleta mono ${r.data_coleta === latestColeta ? 'f-coleta-current' : ''}">${fmtDate(r.data_coleta)}</span>
                 <span class="f-cia">${r.cia_aerea}</span>
                 <span class="f-time mono">${r.horario_saida_ida}–${r.horario_chegada_ida}</span>
                 <span class="f-dur">${r.duracao_ida}</span>
                 <span class="f-stop ${r.escalas === '0' ? 'stop-none' : ''}">${r.escalas === '0' ? 'sem escalas' : (r.conexao || '1 parada')}</span>
-                <span class="f-price mono">${fmtBRL(r.preco_total_reais)}</span>
+                <span class="f-price mono">${fmtBRL(r.preco_total_reais)}${viaRec ? ` <span class="f-total-jpa">(${fmtBRL(totalToJPA(r))} até JPA)</span>` : ''}</span>
+                ${status ? `<span class="f-status status-${status}">${status === 'segura' ? 'chegada com folga' : status === 'apertada' ? 'chegada apertada' : 'perde o ônibus'}</span>` : ''}
                 ${r.observacao ? `<span class="f-obs">${r.observacao}</span>` : ''}
               </div>
-            `).join('')}
+            `; }).join('')}
           `;
         }).join('')}
       </div>
@@ -475,7 +515,7 @@ async function main() {
     const lastCollect = rows.map(r => r.data_coleta).sort().pop();
     document.getElementById('lastUpdate').textContent = lastCollect;
     const current = latestOnly(rows);
-    app.innerHTML = renderTop3(current) + renderStrip(current) + renderTable(rows);
+    app.innerHTML = renderTop3(current) + renderStrategyCompare(current) + renderTable(rows);
   } catch (e) {
     app.innerHTML = `<div class="error">Não foi possível carregar dados_voos.csv (${e.message}). Se você abriu este arquivo direto do disco, sirva a pasta com um servidor local ou acesse via GitHub Pages.</div>`;
   }
