@@ -26,3 +26,7 @@ data_coleta,origem,destino,data_ida,data_volta,cia_aerea,horario_saida_ida,horar
 2026-08-03,VIX,JPA,2026-09-04,2026-09-14,Gol,18:40,02:50+1,8h10,1,,2909,melhor opcao da janela 04-14/09
 2026-08-03,VIX,JPA,2026-09-04,2026-09-14,Gol,06:00,11:45,5h45,1,,3038,
 2026-08-03,VIX,JPA,2026-09-04,2026-09-14,Gol,12:00,16:15,4h15,1,,3612,
+2026-08-03,VIX,REC,2026-09-01,2026-09-11,LATAM,09:40,15:30,5h50,1,GRU,1298,busca flexivel - chegada casa com o onibus das 16h
+2026-08-03,VIX,REC,2026-09-01,2026-09-11,LATAM,18:05,23:20,5h15,1,BSB,1286,busca flexivel - mais barato encontrado
+2026-08-03,VIX,REC,2026-09-01,2026-09-11,Azul,05:00,07:15,2h15,0,,1499,busca flexivel - direto
+2026-08-03,VIX,JPA,2026-09-01,2026-09-11,Gol,12:00,16:15,4h15,1,,2236,busca flexivel - melhor opcao direto
