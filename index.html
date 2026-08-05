@@ -393,10 +393,8 @@ function totalDurationMin(row) {
 }
 
 function score(row) {
-  const price = totalToJPA(row);
-  const mins = totalDurationMin(row);
-  const stops = parseInt(row.escalas, 10) || 0;
-  return price + mins * 3 + stops * 150;
+  // Ranking por preço (o que decide é o valor final; duração só desempata preços iguais)
+  return totalToJPA(row) * 1000 + totalDurationMin(row);
 }
 
 function fmtBRL(n) {
@@ -433,7 +431,7 @@ function renderTop3(rows) {
   const labels = ['Melhor custo-benefício', '2º melhor', '3º melhor'];
   return `
     <section>
-      <h2>Top 3 melhor forma de chegar a João Pessoa (ida e volta)</h2>
+      <h2>Top 3 mais barato para chegar a João Pessoa (ida e volta)</h2>
       <div class="top3">
         ${ranked.map((r, i) => {
           const viaRec = r.destino === 'REC';
