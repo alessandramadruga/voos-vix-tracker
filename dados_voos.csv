@@ -30,3 +30,6 @@ data_coleta,origem,destino,data_ida,data_volta,cia_aerea,horario_saida_ida,horar
 2026-08-03,VIX,REC,2026-09-01,2026-09-11,LATAM,18:05,23:20,5h15,1,BSB,1286,busca flexivel - mais barato encontrado
 2026-08-03,VIX,REC,2026-09-01,2026-09-11,Azul,05:00,07:15,2h15,0,,1499,busca flexivel - direto
 2026-08-03,VIX,JPA,2026-09-01,2026-09-11,Gol,12:00,16:15,4h15,1,,2236,busca flexivel - melhor opcao direto
+2026-08-03,VIX,REC,2026-09-02,2026-09-13,LATAM,15:00,00:05+1,9h05,1,GRU,1275,pedido do usuario - mais barato encontrado
+2026-08-03,VIX,REC,2026-09-02,2026-09-13,Azul,05:00,07:15,2h15,0,,1484,pedido do usuario - direto
+2026-08-03,VIX,JPA,2026-09-02,2026-09-13,Gol,12:00,16:15,4h15,1,,2236,pedido do usuario - melhor opcao direto
