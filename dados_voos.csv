@@ -34,3 +34,5 @@ data_coleta,origem,destino,data_ida,data_volta,cia_aerea,horario_saida_ida,horar
 2026-08-05,VIX,REC,2026-09-04,2026-09-14,Azul,05:00,07:15,2h15,0,,1878,checagem diaria - direto, preco subiu bastante
 2026-08-05,VIX,REC,2026-09-05,2026-09-15,LATAM,18:05,23:20,5h15,1,BSB,1542,checagem diaria - janela 05-15
 2026-08-05,VIX,REC,2026-09-06,2026-09-16,LATAM,14:55,00:05+1,9h10,1,GRU,1413,checagem diaria - chega no limite do dia 07
+2026-08-05,VIX,REC,2026-09-02,2026-09-14,LATAM,17:35,23:35,6h00,1,GRU,1131,achado pelo usuario - novo recorde
+2026-08-05,VIX,REC,2026-09-02,2026-09-14,LATAM,15:00,20:20,5h20,1,GRU,1419,chegada segura mais cedo
